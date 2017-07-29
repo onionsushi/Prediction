@@ -1,0 +1,76 @@
+---
+title: "Prediction Assignment Writeup"
+author: "abelismyid"
+date: "26 July 2017"
+output: html_document
+---
+
+
+## Data processing
+
+We first need to obtain raw data 
+```{r}
+training <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+testing <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+```
+
+
+Then we will process the data to minimize computing time and confusion. The name and identity numbers, and other blank columns need to be removed from the training set.
+
+```{r}
+library(caret)
+x <- 1:160 
+deletecolumn <- x[is.na(training[1,x])|training[1,x]==""]
+traindata <- training[,-c(1,2,3,4,5,6,7, deletecolumn)]
+```
+
+##Data partitioning
+
+Since the data has 19622 observation and more than 50 variables, it will take very long time to compute the outcome. We will take three small subsets of randomly selected elements in the training set. Each subset will generate their own models.
+```{r}
+set.seed(123)
+trainpart1 <- createDataPartition(y = traindata$classe, p =1/20, list= FALSE)
+trainpart2 <- createDataPartition(y = traindata$classe[-trainpart1], p =1/19, list= FALSE)
+trainpart3 <- createDataPartition(y = traindata$classe[-c(trainpart1, trainpart2)], p =1/18, list= FALSE)
+
+```
+
+##Training
+We will use random forest to generate our models for each partitions.
+```{r}
+mod <- train(classe ~ ., method = "rf", data = traindata[trainpart1,])
+mod1<-mod
+mod2 <- train(classe ~ ., method = "rf", data = traindata[trainpart2,])
+mod3 <- train(classe ~ ., method = "rf", data = traindata[trainpart3,])
+```
+
+And we will combine these 3 models into a single model. First, we make a new dataset to test the 3 models, and then make another data frame to generate the combined model.
+
+```{r}
+sampletest1 <- createDataPartition(y = traindata$classe, p =1/10, list= FALSE)
+sample1 <- traindata[sampletest1,]
+pred1 <- predict(mod1, sample1)
+pred2 <- predict(mod2, sample1)
+pred3 <- predict(mod3, sample1)
+combinedata <- data.frame( classe = sample1$classe, pred1 = pred1, pred2 = pred2, pred3 = pred3)
+```
+
+Then we finally have our combined model, and we will check the accuracy
+```{r}
+
+combinemodel <- train(classe ~ . , method = "rf", data = combinedata)
+confusionMatrix(predict(combinemodel, sample1),sample1$classe)
+```
+
+##Prediction
+
+```{r}
+pred1 <- predict(mod1, testing)
+pred2 <- predict(mod2, testing)
+pred3 <- predict(mod3, testing)
+finalpred <- predict(combinemodel, testing)
+finalpred
+```
+
+
+
